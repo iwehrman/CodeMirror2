@@ -165,12 +165,6 @@
       indentation (only works if the mode supports indentation).
       Default is true.</dd>
 
-      <dt id="option_autoClearEmptyLines"><code>autoClearEmptyLines (boolean)</code></dt>
-      <dd>When turned on (default is off), this will
-      automatically clear lines consisting only of whitespace when the
-      cursor leaves them. This is mostly useful to prevent auto
-      indentation from introducing trailing whitespace in a file.</dd>
-
       <dt id="option_keyMap"><code>keyMap (string)</code></dt>
       <dd>Configures the keymap to use. The default
       is <code>"default"</code>, which is the only keymap defined
@@ -217,6 +211,10 @@
       the special value <code>"nocursor"</code> is given (instead of
       simply <code>true</code>), focusing of the editor is also
       disallowed.</dd>
+
+      <dt id="option_showCursorWhenSelecting"><code>showCursorWhenSelecting (boolean)</code></dt>
+      <dd>Whether the cursor should be drawn when a selection is
+      active. Defaults to false.</dd>
 
       <dt id="option_undoDepth"><code>undoDepth (integer)</code></dt>
       <dd>The maximum number of undo levels that the editor stores.
@@ -433,7 +431,7 @@
     also contains the <code>"default"</code> keymap holding the
     default bindings.</p>
 
-    <p>The values of properties in keymaps can be either functions of
+    <p id="commands">The values of properties in keymaps can be either functions of
     a single argument (the CodeMirror instance), strings, or
     <code>false</code>. Such strings refer to properties of the
     <code>CodeMirror.commands</code> object, which defines a number of
@@ -591,16 +589,22 @@
       or the end of the selection must be retrieved. If it is not
       given, the current cursor pos, i.e. the side of the selection
       that would move if you pressed an arrow key, is chosen.
-      A <code>{line, ch}</code> object will be returned.</dd>
+      Alternatively, you can pass one of the
+      strings <code>"start"</code>, <code>"end"</code>, <code>"head"</code>
+      (same as not passing anything), or <code>"anchor"</code> (the
+      opposite). A <code>{line, ch}</code> object will be
+      returned.</dd>
       <dt id="somethingSelected"><code>somethingSelected() → boolean</code></dt>
       <dd>Return true if any text is selected.</dd>
       <dt id="setCursor"><code>setCursor(pos)</code></dt>
       <dd>Set the cursor position. You can either pass a
       single <code>{line, ch}</code> object, or the line and the
       character as two separate parameters.</dd>
-      <dt id="setSelection"><code>setSelection(start, end)</code></dt>
-      <dd>Set the selection range. <code>start</code>
-      and <code>end</code> should be <code>{line, ch}</code> objects.</dd>
+      <dt id="setSelection"><code>setSelection(anchor, head)</code></dt>
+      <dd>Set the selection range. <code>anchor</code>
+      and <code>head</code> should be <code>{line, ch}</code>
+      objects. <code>head</code> defaults to <code>anchor</code> when
+      not givne.</dd>
 
       <dt id="getLine"><code>getLine(n) → string</code></dt>
       <dd>Get the content of line <code>n</code>.</dd>
@@ -713,11 +717,20 @@
       called.</dd>
 
       <dt id="indentLine"><code>indentLine(line, dir)</code></dt>
-      <dd>Reset the given line's indentation to the indentation
-      prescribed by the mode. If the second argument is given,
-      indentation will be increased (if <code>dir</code> is true) or
-      decreased (if false) by an <a href="#option_indentUnit">indent
-      unit</a> instead.</dd>
+      <dd>Adjust the indentation of the given line. The second
+      argument (which defaults to <code>"smart"</code>) may be one of:
+        <dl>
+          <dt><code>"prev"</code></dt>
+          <dd>Base indentation on the indentation of the previous line.</dd>
+          <dt><code>"smart"</code></dt>
+          <dd>Use the mode's smart indentation if available, behave
+          like <code>"prev"</code> otherwise.</dd>
+          <dt><code>"add"</code></dt>
+          <dd>Increase the indentation of the line by
+          one <a href="#option_indentUnit">indent unit</a>.</dd>
+          <dt><code>"subtract"</code></dt>
+          <dd>Reduce the indentation of the line.</dd>
+        </dl></dd>
 
       <dt id="getTokenAt"><code>getTokenAt(pos) → object</code></dt>
       <dd>Retrieves information about the token the current mode found
@@ -727,8 +740,9 @@
         <dt><code>start</code></dt><dd>The character (on the given line) at which the token starts.</dd>
         <dt><code>end</code></dt><dd>The character at which the token ends.</dd>
         <dt><code>string</code></dt><dd>The token's string.</dd>
-        <dt><code>className</code></dt><dd>The class the mode assigned
-        to the token. (Can be null when no class was assigned.)</dd>
+        <dt><code>type</code></dt><dd>The token type the mode assigned
+        to the token, such as <code>"keyword"</code>
+        or <code>"comment"</code> (may also be null).</dd>
         <dt><code>state</code></dt><dd>The mode's state at the end of this token.</dd>
       </dl></dd>
 
@@ -927,16 +941,27 @@
       lot faster. The return value from this method will be the return
       value of your function.</dd>
 
-      <dt id="compoundChange"><code>compoundChange(func) → result</code></dt>
-      <dd>Will call the given function (and return its result),
-      combining all changes made while that function executes into a
-      single undo event.</dd>
-
       <dt id="refresh"><code>refresh()</code></dt>
       <dd>If your code does something to change the size of the editor
       element (window resizes are already listened for), or unhides
       it, you should probably follow up by calling this method to
       ensure CodeMirror is still looking as intended.</dd>
+
+      <dt id="extendSelection"><code>extendSelection(pos, pos2)</code></dt>
+      <dd>Similar
+      to <a href="#setSelection"><code>setSelection</code></a>, but
+      will, if shift is held or
+      the <a href="#setExtending">extending</a> flag is set, move the
+      head of the selection while leaving the anchor at its current
+      place. <code>pos2</code> is optional, and can be passed to
+      ensure a region (for example a word or paragraph) will end up
+      selected (in addition to whatever lies between that region and
+      the current anchor).</dd>
+      <dt id="setExtending"><code>setExtending(bool)</code></dt>
+      <dd>Sets or clears the 'extending' flag, which acts similar to
+      the shift key, in that it will cause cursor movement and calls
+      to <a href="#extendSelection"><code>extendSelection</code></a>
+      to leave the selection anchor in place.</dd>
 
       <dt id="getInputField"><code>getInputField() → textarea</code></dt>
       <dd>Returns the hidden textarea used to read input.</dd>
@@ -1159,6 +1184,11 @@
       which will ensure the given mode is loaded and cause the given
       editor instance to refresh its mode when the loading
       succeeded. See the <a href="../demo/loadmode.html">demo</a>.</dd>
+      <dt id="util_continuecomment"><a href="../lib/util/continuecomment.js"><code>continuecomment.js</code></a></dt>
+      <dd>Adds a <a href="#commands">command</a>
+      called <code>newlineAndIndentContinueComment</code> that you can
+      bind <code>Enter</code> to in order to have the editor prefix
+      new lines inside C-like block comments with an asterisk.</dd>
     </dl>
 
     <h2 id="modeapi">Writing CodeMirror Modes</h2>

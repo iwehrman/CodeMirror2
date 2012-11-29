@@ -89,6 +89,43 @@ testCM("selection", function(cm) {
   eqPos(cm.getCursor(true), {line: 1, ch: 2});
 }, {value: "111111\n222222\n333333"});
 
+testCM("extendSelection", function(cm) {
+  cm.setExtending(true);
+  addDoc(cm, 10, 10);
+  cm.setSelection({line: 3, ch: 5});
+  eqPos(cm.getCursor("head"), {line: 3, ch: 5});
+  eqPos(cm.getCursor("anchor"), {line: 3, ch: 5});
+  cm.setSelection({line: 2, ch: 5}, {line: 5, ch: 5});
+  eqPos(cm.getCursor("head"), {line: 5, ch: 5});
+  eqPos(cm.getCursor("anchor"), {line: 2, ch: 5});
+  eqPos(cm.getCursor("start"), {line: 2, ch: 5});
+  eqPos(cm.getCursor("end"), {line: 5, ch: 5});
+  cm.setSelection({line: 5, ch: 5}, {line: 2, ch: 5});
+  eqPos(cm.getCursor("head"), {line: 2, ch: 5});
+  eqPos(cm.getCursor("anchor"), {line: 5, ch: 5});
+  eqPos(cm.getCursor("start"), {line: 2, ch: 5});
+  eqPos(cm.getCursor("end"), {line: 5, ch: 5});
+  cm.extendSelection({line: 3, ch: 2});
+  eqPos(cm.getCursor("head"), {line: 3, ch: 2});
+  eqPos(cm.getCursor("anchor"), {line: 5, ch: 5});
+  cm.extendSelection({line: 6, ch: 2});
+  eqPos(cm.getCursor("head"), {line: 6, ch: 2});
+  eqPos(cm.getCursor("anchor"), {line: 5, ch: 5});
+  cm.extendSelection({line: 6, ch: 3}, {line: 6, ch: 4});
+  eqPos(cm.getCursor("head"), {line: 6, ch: 4});
+  eqPos(cm.getCursor("anchor"), {line: 5, ch: 5});
+  cm.extendSelection({line: 0, ch: 3}, {line: 0, ch: 4});
+  eqPos(cm.getCursor("head"), {line: 0, ch: 3});
+  eqPos(cm.getCursor("anchor"), {line: 5, ch: 5});
+  cm.extendSelection({line: 4, ch: 5}, {line: 6, ch: 5});
+  eqPos(cm.getCursor("head"), {line: 6, ch: 5});
+  eqPos(cm.getCursor("anchor"), {line: 4, ch: 5});
+  cm.setExtending(false);
+  cm.extendSelection({line: 0, ch: 3}, {line: 0, ch: 4});
+  eqPos(cm.getCursor("head"), {line: 0, ch: 4});
+  eqPos(cm.getCursor("anchor"), {line: 0, ch: 3});
+});
+
 testCM("lines", function(cm) {
   eq(cm.getLine(0), "111111");
   eq(cm.getLine(1), "222222");
@@ -229,20 +266,39 @@ testCM("undo", function(cm) {
 }, {value: "abc"});
 
 testCM("undoMultiLine", function(cm) {
-  cm.replaceRange("x", {line:0, ch: 0});
-  cm.replaceRange("y", {line:1, ch: 0});
+  cm.operation(function() {
+    cm.replaceRange("x", {line:0, ch: 0});
+    cm.replaceRange("y", {line:1, ch: 0});
+  });
   cm.undo();
   eq(cm.getValue(), "abc\ndef\nghi");
-  cm.replaceRange("y", {line:1, ch: 0});
-  cm.replaceRange("x", {line:0, ch: 0});
+  cm.operation(function() {
+    cm.replaceRange("y", {line:1, ch: 0});
+    cm.replaceRange("x", {line:0, ch: 0});
+  });
   cm.undo();
   eq(cm.getValue(), "abc\ndef\nghi");
-  cm.replaceRange("y", {line:2, ch: 0});
-  cm.replaceRange("x", {line:1, ch: 0});
-  cm.replaceRange("z", {line:2, ch: 0});
+  cm.operation(function() {
+    cm.replaceRange("y", {line:2, ch: 0});
+    cm.replaceRange("x", {line:1, ch: 0});
+    cm.replaceRange("z", {line:2, ch: 0});
+  });
   cm.undo();
-  eq(cm.getValue(), "abc\ndef\nghi");
+  eq(cm.getValue(), "abc\ndef\nghi", 3);
 }, {value: "abc\ndef\nghi"});
+
+testCM("undoSelection", function(cm) {
+  cm.setSelection({line: 0, ch: 2}, {line: 0, ch: 4});
+  cm.replaceSelection("");
+  cm.setCursor({line: 1, ch: 0});
+  cm.undo();
+  eqPos(cm.getCursor(true), {line: 0, ch: 2});
+  eqPos(cm.getCursor(false), {line: 0, ch: 4});
+  cm.setCursor({line: 1, ch: 0});
+  cm.redo();
+  eqPos(cm.getCursor(true), {line: 0, ch: 2});
+  eqPos(cm.getCursor(false), {line: 0, ch: 2});
+}, {value: "abcdefgh\n"});
 
 testCM("markTextSingleLine", function(cm) {
   forEach([{a: 0, b: 1, c: "", f: 2, t: 5},
@@ -295,14 +351,12 @@ testCM("markTextMultiLine", function(cm) {
 
 testCM("markTextUndo", function(cm) {
   var marker1, marker2, bookmark;
-  cm.compoundChange(function(){
-    marker1 = cm.markText({line: 0, ch: 1}, {line: 0, ch: 3},
-                          {className: "CodeMirror-matchingbracket"});
-    marker2 = cm.markText({line: 0, ch: 0}, {line: 2, ch: 1},
-                          {className: "CodeMirror-matchingbracket"});
-    bookmark = cm.setBookmark({line: 1, ch: 5});
-  });
-  cm.compoundChange(function(){
+  marker1 = cm.markText({line: 0, ch: 1}, {line: 0, ch: 3},
+                        {className: "CodeMirror-matchingbracket"});
+  marker2 = cm.markText({line: 0, ch: 0}, {line: 2, ch: 1},
+                        {className: "CodeMirror-matchingbracket"});
+  bookmark = cm.setBookmark({line: 1, ch: 5});
+  cm.operation(function(){
     cm.replaceRange("foo", {line: 0, ch: 2});
     cm.replaceRange("bar\baz\bug\n", {line: 2, ch: 0}, {line: 3, ch: 0});
   });
@@ -407,8 +461,8 @@ testCM("selectionPos", function(cm) {
 
 testCM("restoreHistory", function(cm) {
   cm.setValue("abc\ndef");
-  cm.compoundChange(function() {cm.setLine(1, "hello");});
-  cm.compoundChange(function() {cm.setLine(0, "goop");});
+  cm.setLine(1, "hello");
+  cm.setLine(0, "goop");
   cm.undo();
   var storedVal = cm.getValue(), storedHist = cm.getHistory();
   if (window.JSON) storedHist = JSON.parse(JSON.stringify(storedHist));
@@ -661,7 +715,7 @@ testCM("measureEndOfLine", function(cm) {
   is(endPos.left > w - 20, "not at right");
   endPos = cm.charCoords({line: 0, ch: 18});
   eqPos(cm.coordsChar({left: endPos.left, top: endPos.top + 5}), {line: 0, ch: 18});
-}, {mode: "text/html", value: "<!-- foo barrr -->", lineWrapping: true});
+}, {mode: "text/html", value: "<!-- foo barrr -->", lineWrapping: true}, ie_lt8);
 
 testCM("scrollVerticallyAndHorizontally", function(cm) {
   cm.setSize(100, 100);
@@ -686,7 +740,7 @@ testCM("moveVstuck", function(cm) {
   cm.setCursor({line: 0, ch: val.length - 1});
   cm.moveV(-1, "line");
   eqPos(cm.getCursor(), {line: 0, ch: 26});
-}, {lineWrapping: true});
+}, {lineWrapping: true}, ie_lt8);
 
 testCM("clickTab", function(cm) {
   var p0 = cm.charCoords({line: 0, ch: 0});
@@ -1069,7 +1123,7 @@ testCM("dirtyBit", function(cm) {
   cm.undo();
   eq(cm.isClean(), true);
   cm.replaceSelection("boo");
-  cm.compoundChange(function() {cm.replaceSelection("baz");});
+  cm.replaceSelection("baz");
   cm.undo();
   eq(cm.isClean(), false);
   cm.markClean();
